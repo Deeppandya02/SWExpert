@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <fstream>
+#include <algorithm>
+#include <cmath>
 
 static unsigned long long seed = 5;
 
@@ -145,8 +147,7 @@ static void make_tc() {
                 {
                     L++;
                     crossroad_id[y][x] = crossroad_id[y+1][x] = crossroad_id[y][x+1] = crossroad_id[y+1][x+1] = L; 
-                    signal_list[L].signal = 1;
-                    signal_list[L].next_signal = 1;
+                    signal_list[L].signal = signal_list[L].next_signal = 1;
                 }
             }
         }
@@ -549,8 +550,199 @@ const int CELL_SIZE = 50;   // Size of each cell
 const int SCREEN_WIDTH = 800;
 const int SCREEN_HEIGHT = 800;
 
-// ---------------------------- SFML ----------------------------
 
+void draw_map(sf::RenderWindow& window, int cameraX, int cameraY) {
+    int startX = cameraX / CELL_SIZE;
+    int startY = cameraY / CELL_SIZE;
+    int endX = std::min(startX + SCREEN_WIDTH / CELL_SIZE + 1, GRID_SIZE);
+    int endY = std::min(startY + SCREEN_HEIGHT / CELL_SIZE + 1, GRID_SIZE);
+
+    for (int y = startY; y < endY; ++y) {
+        for (int x = startX; x < endX; ++x) {
+            // Create cell rectangle
+            sf::RectangleShape cell(sf::Vector2f(CELL_SIZE, CELL_SIZE));
+            cell.setPosition((x * CELL_SIZE) - cameraX, (y * CELL_SIZE) - cameraY);
+
+            // Set cell color
+            cell.setFillColor(map[y][x] == 1 ? sf::Color::Black : sf::Color::Green);
+            cell.setOutlineColor(sf::Color::White);
+            cell.setOutlineThickness(1);
+
+            // Draw the cell
+            window.draw(cell);
+        }
+    }
+}
+
+void draw_vehicles(sf::RenderWindow& window, int cameraX, int cameraY) {
+    for (int i = 0; i < MAXN; i++) {
+        if (vehicles[i].x < cameraX / CELL_SIZE || vehicles[i].x >= (cameraX + SCREEN_WIDTH) / CELL_SIZE) continue;
+        if (vehicles[i].y < cameraY / CELL_SIZE || vehicles[i].y >= (cameraY + SCREEN_HEIGHT) / CELL_SIZE) continue;
+
+        // Create vehicle rectangle with smaller size
+        sf::RectangleShape vehicle(sf::Vector2f(CELL_SIZE * 0.6f, CELL_SIZE * 0.6f));
+        vehicle.setPosition((vehicles[i].x * CELL_SIZE) - cameraX + CELL_SIZE * 0.2f, (vehicles[i].y * CELL_SIZE) - cameraY + CELL_SIZE * 0.2f);
+
+        // Set vehicle color
+        vehicle.setFillColor(sf::Color::Red);
+        vehicle.setOutlineColor(sf::Color::White);
+        vehicle.setOutlineThickness(1);
+
+        // Draw the vehicle
+        window.draw(vehicle);
+    }
+}
+
+void draw_arrow(sf::RenderWindow& window, int x[], int y[], int size, int cameraX, int cameraY)
+{
+    if (size < 2) return; // Ensure there are at least two points to draw an arrow
+
+    // Create the main arrow body
+    sf::VertexArray arrow(sf::LinesStrip, size);
+    for (int i = 0; i < size; i++)
+    {
+        arrow[i].position = sf::Vector2f((x[i] * CELL_SIZE) - cameraX + CELL_SIZE / 2,
+                                         (y[i] * CELL_SIZE) - cameraY + CELL_SIZE / 2);
+        arrow[i].color = sf::Color::Blue;
+    }
+
+    window.draw(arrow);
+
+    // Create the arrowhead
+    sf::VertexArray arrowhead(sf::Triangles, 3);
+
+    float arrowheadSize = CELL_SIZE / 4.0f; // Adjust size of the arrowhead
+    sf::Vector2f endPoint = arrow[size - 1].position;
+    sf::Vector2f startPoint = arrow[size - 2].position;
+
+    // Determine if the arrow is horizontal or vertical
+    if (endPoint.x == startPoint.x)  // Vertical arrow
+    {
+        // Calculate direction and place arrowhead
+        if (endPoint.y < startPoint.y)  // Arrow pointing down
+        {
+            arrowhead[0].position = sf::Vector2f(endPoint.x - arrowheadSize, endPoint.y + arrowheadSize);  // Left
+            arrowhead[1].position = sf::Vector2f(endPoint.x + arrowheadSize, endPoint.y + arrowheadSize);  // Right
+            arrowhead[2].position = endPoint;  // Tip
+        }
+        else  // Arrow pointing up
+        {
+            arrowhead[0].position = sf::Vector2f(endPoint.x - arrowheadSize, endPoint.y - arrowheadSize);  // Left
+            arrowhead[1].position = sf::Vector2f(endPoint.x + arrowheadSize, endPoint.y - arrowheadSize);  // Right
+            arrowhead[2].position = endPoint;  // Tip
+        }
+    }
+    else  // Horizontal arrow
+    {
+        // Calculate direction and place arrowhead
+        if (endPoint.x < startPoint.x)  // Arrow pointing right
+        {
+            arrowhead[0].position = sf::Vector2f(endPoint.x + arrowheadSize, endPoint.y - arrowheadSize);  // Top
+            arrowhead[1].position = sf::Vector2f(endPoint.x + arrowheadSize, endPoint.y + arrowheadSize);  // Bottom
+            arrowhead[2].position = endPoint;  // Tip
+        }
+        else  // Arrow pointing left
+        {
+            arrowhead[0].position = sf::Vector2f(endPoint.x - arrowheadSize, endPoint.y - arrowheadSize);  // Top
+            arrowhead[1].position = sf::Vector2f(endPoint.x - arrowheadSize, endPoint.y + arrowheadSize);  // Bottom
+            arrowhead[2].position = endPoint;  // Tip
+        }
+    }
+
+    // Set arrowhead color
+    for (int i = 0; i < 3; i++)
+    {
+        arrowhead[i].color = sf::Color::Blue;
+    }
+
+    // Draw the arrowhead
+    window.draw(arrowhead);
+}
+
+
+void draw_signal(sf::RenderWindow& window, int x, int y, int cameraX, int cameraY) {
+    int signal = signal_list[crossroad_id[y][x]].signal;
+
+    switch(signal) {
+        case UPLEFT:
+        {
+            int x1[] = {x+1, x+1};
+            int y1[] = {y+2, y-1};
+            draw_arrow(window, x1, y1, 2, cameraX, cameraY);
+            int x2[] = {x+1, x+1, x-1};
+            int y2[] = {y+2, y, y};
+            draw_arrow(window, x2, y2, 3, cameraX, cameraY);
+            break;
+        }
+        case RIGHTUP:
+        {
+            int x1[] = {x-1, x+2};
+            int y1[] = {y+1, y+1};
+            draw_arrow(window, x1, y1, 2, cameraX, cameraY);
+            int x2[] = {x-1, x+1, x+1};
+            int y2[] = {y+1, y+1, y-1};
+            draw_arrow(window, x2, y2, 3, cameraX, cameraY);
+            break;
+        }
+        case DOWNRIGHT:
+        {
+            int x1[] = {x, x};
+            int y1[] = {y-1, y+2};
+            draw_arrow(window, x1, y1, 2, cameraX, cameraY);
+            int x2[] = {x, x, x+2};
+            int y2[] = {y-1, y+1, y+1};
+            draw_arrow(window, x2, y2, 3, cameraX, cameraY);
+            break;
+        }
+        case LEFTDOWN:
+        {
+            int x1[] = {x+1, x+1};
+            int y1[] = {y-1, y+2};
+            draw_arrow(window, x1, y1, 2, cameraX, cameraY);
+            int x2[] = {x+1, x+1, x-1};
+            int y2[] = {y-1, y+1, y+1};
+            draw_arrow(window, x2, y2, 3, cameraX, cameraY);
+            break;
+        }
+        case VERTICAL:
+        {
+            int x1[] = {x, x};
+            int y1[] = {y-1, y+2};
+            draw_arrow(window, x1, y1, 2, cameraX, cameraY);
+            int x2[] = {x+1, x+1};
+            int y2[] = {y+2, y-1};
+            draw_arrow(window, x2, y2, 2, cameraX, cameraY);
+            break;
+        }
+        case HORIZONTAL:
+        {
+            int x1[] = {x+2, x-1};
+            int y1[] = {y, y};
+            draw_arrow(window, x1, y1, 2, cameraX, cameraY);
+            int x2[] = {x-1, x+2};
+            int y2[] = {y+1, y+1};
+            draw_arrow(window, x2, y2, 2, cameraX, cameraY);
+            break;
+        }
+    }
+}
+
+void draw_signals(sf::RenderWindow& window, int cameraX, int cameraY) {
+    int startX = cameraX / CELL_SIZE;
+    int startY = cameraY / CELL_SIZE;
+    int endX = std::min(startX + SCREEN_WIDTH / CELL_SIZE + 1, GRID_SIZE);
+    int endY = std::min(startY + SCREEN_HEIGHT / CELL_SIZE + 1, GRID_SIZE);
+
+    for (int y = std::max(1, startY); y < std::min(MAXM-1, endY); ++y) {
+        for (int x = std::max(1, startX); x < std::min(MAXM-1, endX); ++x) {
+            if (crossroad_id[y][x] != 0 && crossroad_id[y+1][x] != 0 && crossroad_id[y][x+1] != 0 && crossroad_id[y+1][x+1] != 0)
+            {
+                draw_signal(window, x, y, cameraX, cameraY);
+            }
+        }
+    }
+}
+// ---------------------------- SFML ----------------------------
 
 int main()
 {
@@ -558,25 +750,6 @@ int main()
     for(int i = 0; i < MAX_TC; i++)
     {
         make_tc();
-
-        std::ofstream outfile("game_state.txt");
-        outfile << "Number of roads: " << K << "\n";
-        outfile << "Number of crossroads: " << L << "\n";
-        outfile << "Roads:\n";
-        for (int j = 0; j < K; j++) {
-            outfile << "Source: (" << src[j].y << ", " << src[j].x << ") ";
-            outfile << "Destination: (" << dest[j].y << ", " << dest[j].x << ")\n";
-        }
-
-        outfile << "Crossroads:\n";
-        for (int y = 0; y < MAXN; y++) {
-            for (int x = 0; x < MAXM; x++) {
-            if (crossroad_id[y][x] != 0) {
-                outfile << "Crossroad ID: " << crossroad_id[y][x] << " at (" << y << ", " << x << ")\n";
-            }
-            }
-        }
-        outfile.close();
         
         init(MAXM, map_bak, crossroad_id_bak, vehicles_bak);
 
@@ -608,28 +781,14 @@ int main()
             // Clear the window
             window.clear();
 
-            // Calculate visible grid area
-            int startX = cameraX / CELL_SIZE;
-            int startY = cameraY / CELL_SIZE;
-            int endX = std::min(startX + SCREEN_WIDTH / CELL_SIZE + 1, GRID_SIZE);
-            int endY = std::min(startY + SCREEN_HEIGHT / CELL_SIZE + 1, GRID_SIZE);
+            // Draw the map
+            draw_map(window, cameraX, cameraY);
 
-            // Render visible grid cells
-            for (int y = startY; y < endY; ++y) {
-                for (int x = startX; x < endX; ++x) {
-                    // Create cell rectangle
-                    sf::RectangleShape cell(sf::Vector2f(CELL_SIZE, CELL_SIZE));
-                    cell.setPosition((x * CELL_SIZE) - cameraX, (y * CELL_SIZE) - cameraY);
+            // Draw the vehicles
+            draw_vehicles(window, cameraX, cameraY);
 
-                    // Set cell color
-                    cell.setFillColor(map[y][x] == 1 ? sf::Color::Green : sf::Color::Black);
-                    cell.setOutlineColor(sf::Color::White);
-                    cell.setOutlineThickness(1);
-
-                    // Draw the cell
-                    window.draw(cell);
-                }
-            }
+            // Draw the signals
+            draw_signals(window, cameraX, cameraY);
 
             // Display the frame
             window.display();
