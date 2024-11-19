@@ -127,10 +127,10 @@ static void make_tc() {
             {
                 map[y][x] = map[y][x + 1] = 1;
             }
-            src[K] = Coordinates(0, x + 1);
-            dest[K++] = Coordinates(0, x );
-            src[K] = Coordinates(MAXM - 1, x);
-            dest[K++] = Coordinates(MAXM - 1, x + 1);
+            src[K] = Coordinates(0, x);
+            dest[K++] = Coordinates(0, x+1);
+            src[K] = Coordinates(MAXM - 1, x+1);
+            dest[K++] = Coordinates(MAXM - 1, x);
             if (min_x > x) min_x = x;
             if (max_x < x) max_x = x;
         }
@@ -547,8 +547,12 @@ extern bool process();
 // Constants
 const int GRID_SIZE = 1000; // Grid dimensions
 const int CELL_SIZE = 50;   // Size of each cell
-const int SCREEN_WIDTH = 800;
-const int SCREEN_HEIGHT = 800;
+const int SCREEN_WIDTH = 1600;
+const int SCREEN_HEIGHT = 1600;
+
+// Camera position
+int cameraX = 0;
+int cameraY = 0;
 
 
 void draw_map(sf::RenderWindow& window, int cameraX, int cameraY) {
@@ -742,6 +746,51 @@ void draw_signals(sf::RenderWindow& window, int cameraX, int cameraY) {
         }
     }
 }
+
+void render()
+{
+    sf::RenderWindow window(sf::VideoMode(SCREEN_WIDTH, SCREEN_HEIGHT), "Traffic Simulation");
+
+    // Main loop
+    while (window.isOpen()) {
+        sf::Event event;
+        while (window.pollEvent(event)) {
+            if (event.type == sf::Event::Closed)
+                window.close();
+        }
+
+        // Handle camera movement
+        const int CAMERA_STEP = 5;
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) cameraY -= CAMERA_STEP;
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) cameraY += CAMERA_STEP;
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) cameraX -= CAMERA_STEP;
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) cameraX += CAMERA_STEP;
+
+        // Close the window when 'C' is pressed
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::C)) {
+            window.close();
+        }
+
+        // Prevent camera from going out of bounds
+        cameraX = std::max(0, std::min(cameraX, GRID_SIZE * CELL_SIZE - SCREEN_WIDTH));
+        cameraY = std::max(0, std::min(cameraY, GRID_SIZE * CELL_SIZE - SCREEN_HEIGHT));
+
+        // Clear the window
+        window.clear();
+
+        // Draw the map
+        draw_map(window, cameraX, cameraY);
+
+        // Draw the vehicles
+        draw_vehicles(window, cameraX, cameraY);
+
+        // Draw the signals
+        draw_signals(window, cameraX, cameraY);
+
+        // Display the frame
+        window.display();
+    }
+}
 // ---------------------------- SFML ----------------------------
 
 int main()
@@ -753,50 +802,11 @@ int main()
         
         init(MAXM, map_bak, crossroad_id_bak, vehicles_bak);
 
-        // Create a window
-        sf::RenderWindow window(sf::VideoMode(SCREEN_WIDTH, SCREEN_HEIGHT), "Traffic Simulation");
-
-        // Camera position
-        int cameraX = 0, cameraY = 0;
-
-        // Main loop
-        while (window.isOpen()) {
-            sf::Event event;
-            while (window.pollEvent(event)) {
-                if (event.type == sf::Event::Closed)
-                    window.close();
-            }
-
-            // Handle camera movement
-            const int CAMERA_STEP = 10;
-            if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) cameraY -= CAMERA_STEP;
-            if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) cameraY += CAMERA_STEP;
-            if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) cameraX -= CAMERA_STEP;
-            if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) cameraX += CAMERA_STEP;
-
-            // Prevent camera from going out of bounds
-            cameraX = std::max(0, std::min(cameraX, GRID_SIZE * CELL_SIZE - SCREEN_WIDTH));
-            cameraY = std::max(0, std::min(cameraY, GRID_SIZE * CELL_SIZE - SCREEN_HEIGHT));
-
-            // Clear the window
-            window.clear();
-
-            // Draw the map
-            draw_map(window, cameraX, cameraY);
-
-            // Draw the vehicles
-            draw_vehicles(window, cameraX, cameraY);
-
-            // Draw the signals
-            draw_signals(window, cameraX, cameraY);
-
-            // Display the frame
-            window.display();
-        }
         bool is_finished = false;
         
         while(is_finished == false)
         {
+            render();
             is_finished = process();
             move_vehicles();
             gTotalScore++;

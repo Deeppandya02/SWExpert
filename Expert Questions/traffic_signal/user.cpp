@@ -15,5 +15,5 @@ void init(int N, int map[][MAXM], int crossroad_id[][MAXM], Vehicle vehicles[MAX
 bool process()
 {
     // Implement this function
-    return true;
+    return false;
 }
