@@ -400,8 +400,8 @@ void move_vehicles() {
             if(crossroad_id[y][x] == 0)
             {
                 int signal = signal_list[crossroad_id[next_y][next_x]].signal;
-                int turn_dir = get_nextdir(vehicles[i]);
-                if(turn_dir == RIGHT)
+                turn_dir[i] = get_nextdir(vehicles[i]);
+                if(turn_dir[i] == TURN_RIGHT)
                 {
                     is_movable[i] = 1;
                 }
@@ -424,7 +424,7 @@ void move_vehicles() {
                         is_movable[i] = 1;
                     }
 
-                    if(turn_dir == GO_STRAIGHT)
+                    if(turn_dir[i] == GO_STRAIGHT)
                     {
                         if(dir == UP || dir == DOWN)
                         {
@@ -470,6 +470,7 @@ void move_vehicles() {
             if(turn_dir[i] == TURN_RIGHT)
             {
                 vehicles[i].dir = (dir + 1) % 4;
+                turn_dir[i] = GO_STRAIGHT;
             }
             else if(turn_dir[i] == TURN_LEFT)
             {
@@ -547,15 +548,16 @@ extern bool process();
 // Constants
 const int GRID_SIZE = 1000; // Grid dimensions
 const int CELL_SIZE = 50;   // Size of each cell
-const int SCREEN_WIDTH = 1600;
-const int SCREEN_HEIGHT = 1600;
+const int SCREEN_WIDTH = 1800;
+const int SCREEN_HEIGHT = 960;
+const int CAMERA_STEP = 15;
 
 // Camera position
 int cameraX = 0;
 int cameraY = 0;
 
 
-void draw_map(sf::RenderWindow& window, int cameraX, int cameraY) {
+void draw_map(sf::RenderWindow& window) {
     int startX = cameraX / CELL_SIZE;
     int startY = cameraY / CELL_SIZE;
     int endX = std::min(startX + SCREEN_WIDTH / CELL_SIZE + 1, GRID_SIZE);
@@ -571,6 +573,10 @@ void draw_map(sf::RenderWindow& window, int cameraX, int cameraY) {
             cell.setFillColor(map[y][x] == 1 ? sf::Color::Black : sf::Color::Green);
             cell.setOutlineColor(sf::Color::White);
             cell.setOutlineThickness(1);
+            if(x >= 2 && y >= 2 && crossroad_id[y-2][x-2] != 0 && crossroad_id[y-2][x-1] != 0 && crossroad_id[y-1][x-2] != 0 && crossroad_id[y-1][x-1] != 0)
+            {
+                cell.setFillColor(sf::Color::Yellow);
+            }
 
             // Draw the cell
             window.draw(cell);
@@ -578,7 +584,7 @@ void draw_map(sf::RenderWindow& window, int cameraX, int cameraY) {
     }
 }
 
-void draw_vehicles(sf::RenderWindow& window, int cameraX, int cameraY) {
+void draw_vehicles(sf::RenderWindow& window) {
     for (int i = 0; i < MAXN; i++) {
         if (vehicles[i].x < cameraX / CELL_SIZE || vehicles[i].x >= (cameraX + SCREEN_WIDTH) / CELL_SIZE) continue;
         if (vehicles[i].y < cameraY / CELL_SIZE || vehicles[i].y >= (cameraY + SCREEN_HEIGHT) / CELL_SIZE) continue;
@@ -597,7 +603,7 @@ void draw_vehicles(sf::RenderWindow& window, int cameraX, int cameraY) {
     }
 }
 
-void draw_arrow(sf::RenderWindow& window, int x[], int y[], int size, int cameraX, int cameraY)
+void draw_arrow(sf::RenderWindow& window, int x[], int y[], int size, sf::Color color)
 {
     if (size < 2) return; // Ensure there are at least two points to draw an arrow
 
@@ -607,7 +613,7 @@ void draw_arrow(sf::RenderWindow& window, int x[], int y[], int size, int camera
     {
         arrow[i].position = sf::Vector2f((x[i] * CELL_SIZE) - cameraX + CELL_SIZE / 2,
                                          (y[i] * CELL_SIZE) - cameraY + CELL_SIZE / 2);
-        arrow[i].color = sf::Color::Blue;
+        arrow[i].color = color;
     }
 
     window.draw(arrow);
@@ -656,7 +662,7 @@ void draw_arrow(sf::RenderWindow& window, int x[], int y[], int size, int camera
     // Set arrowhead color
     for (int i = 0; i < 3; i++)
     {
-        arrowhead[i].color = sf::Color::Blue;
+        arrowhead[i].color = color;
     }
 
     // Draw the arrowhead
@@ -664,74 +670,80 @@ void draw_arrow(sf::RenderWindow& window, int x[], int y[], int size, int camera
 }
 
 
-void draw_signal(sf::RenderWindow& window, int x, int y, int cameraX, int cameraY) {
+void draw_signal(sf::RenderWindow& window, int x, int y) {
     int signal = signal_list[crossroad_id[y][x]].signal;
+    sf::Color color = sf::Color::Blue;
+    if(signal <= 0 || signal > 6)
+    {
+        signal = signal_list[crossroad_id[y][x]].next_signal;
+        color = sf::Color::Green;
+    }
 
     switch(signal) {
         case UPLEFT:
         {
             int x1[] = {x+1, x+1};
             int y1[] = {y+2, y-1};
-            draw_arrow(window, x1, y1, 2, cameraX, cameraY);
+            draw_arrow(window, x1, y1, 2, color);
             int x2[] = {x+1, x+1, x-1};
             int y2[] = {y+2, y, y};
-            draw_arrow(window, x2, y2, 3, cameraX, cameraY);
+            draw_arrow(window, x2, y2, 3, color);
             break;
         }
         case RIGHTUP:
         {
             int x1[] = {x-1, x+2};
             int y1[] = {y+1, y+1};
-            draw_arrow(window, x1, y1, 2, cameraX, cameraY);
+            draw_arrow(window, x1, y1, 2, color);
             int x2[] = {x-1, x+1, x+1};
             int y2[] = {y+1, y+1, y-1};
-            draw_arrow(window, x2, y2, 3, cameraX, cameraY);
+            draw_arrow(window, x2, y2, 3, color);
             break;
         }
         case DOWNRIGHT:
         {
             int x1[] = {x, x};
             int y1[] = {y-1, y+2};
-            draw_arrow(window, x1, y1, 2, cameraX, cameraY);
+            draw_arrow(window, x1, y1, 2, color);
             int x2[] = {x, x, x+2};
             int y2[] = {y-1, y+1, y+1};
-            draw_arrow(window, x2, y2, 3, cameraX, cameraY);
+            draw_arrow(window, x2, y2, 3, color);
             break;
         }
         case LEFTDOWN:
         {
-            int x1[] = {x+1, x+1};
-            int y1[] = {y-1, y+2};
-            draw_arrow(window, x1, y1, 2, cameraX, cameraY);
-            int x2[] = {x+1, x+1, x-1};
-            int y2[] = {y-1, y+1, y+1};
-            draw_arrow(window, x2, y2, 3, cameraX, cameraY);
+            int x1[] = {x+2, x-1};
+            int y1[] = {y, y};
+            draw_arrow(window, x1, y1, 2, color);
+            int x2[] = {x+2, x, x};
+            int y2[] = {y, y, y+2};
+            draw_arrow(window, x2, y2, 3, color);
             break;
         }
         case VERTICAL:
         {
             int x1[] = {x, x};
             int y1[] = {y-1, y+2};
-            draw_arrow(window, x1, y1, 2, cameraX, cameraY);
+            draw_arrow(window, x1, y1, 2, color);
             int x2[] = {x+1, x+1};
             int y2[] = {y+2, y-1};
-            draw_arrow(window, x2, y2, 2, cameraX, cameraY);
+            draw_arrow(window, x2, y2, 2, color);
             break;
         }
         case HORIZONTAL:
         {
             int x1[] = {x+2, x-1};
             int y1[] = {y, y};
-            draw_arrow(window, x1, y1, 2, cameraX, cameraY);
+            draw_arrow(window, x1, y1, 2, color);
             int x2[] = {x-1, x+2};
             int y2[] = {y+1, y+1};
-            draw_arrow(window, x2, y2, 2, cameraX, cameraY);
+            draw_arrow(window, x2, y2, 2, color);
             break;
         }
     }
 }
 
-void draw_signals(sf::RenderWindow& window, int cameraX, int cameraY) {
+void draw_signals(sf::RenderWindow& window) {
     int startX = cameraX / CELL_SIZE;
     int startY = cameraY / CELL_SIZE;
     int endX = std::min(startX + SCREEN_WIDTH / CELL_SIZE + 1, GRID_SIZE);
@@ -741,7 +753,7 @@ void draw_signals(sf::RenderWindow& window, int cameraX, int cameraY) {
         for (int x = std::max(1, startX); x < std::min(MAXM-1, endX); ++x) {
             if (crossroad_id[y][x] != 0 && crossroad_id[y+1][x] != 0 && crossroad_id[y][x+1] != 0 && crossroad_id[y+1][x+1] != 0)
             {
-                draw_signal(window, x, y, cameraX, cameraY);
+                draw_signal(window, x, y);
             }
         }
     }
@@ -760,7 +772,6 @@ void render()
         }
 
         // Handle camera movement
-        const int CAMERA_STEP = 5;
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) cameraY -= CAMERA_STEP;
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) cameraY += CAMERA_STEP;
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) cameraX -= CAMERA_STEP;
@@ -771,6 +782,20 @@ void render()
             window.close();
         }
 
+        for(int i = 0; i < 6; i++)
+        {
+            if(sf::Keyboard::isKeyPressed(static_cast<sf::Keyboard::Key>(sf::Keyboard::Num1 + i)))
+            {
+                sf::Vector2i mousePos = sf::Mouse::getPosition(window);
+                int x = (mousePos.x + cameraX) / CELL_SIZE;
+                int y = (mousePos.y + cameraY) / CELL_SIZE;
+                if(x >= 2 && x < MAXM && y >= 2 && y < MAXM && crossroad_id[y-2][x-2] != 0 && crossroad_id[y-2][x-1] != 0 && crossroad_id[y-1][x-2] != 0 && crossroad_id[y-1][x-1] != 0)
+                {
+                    change_signal(crossroad_id[y-1][x-1], i+1);
+                }
+            }
+        }
+
         // Prevent camera from going out of bounds
         cameraX = std::max(0, std::min(cameraX, GRID_SIZE * CELL_SIZE - SCREEN_WIDTH));
         cameraY = std::max(0, std::min(cameraY, GRID_SIZE * CELL_SIZE - SCREEN_HEIGHT));
@@ -779,13 +804,13 @@ void render()
         window.clear();
 
         // Draw the map
-        draw_map(window, cameraX, cameraY);
+        draw_map(window);
 
         // Draw the vehicles
-        draw_vehicles(window, cameraX, cameraY);
+        draw_vehicles(window);
 
         // Draw the signals
-        draw_signals(window, cameraX, cameraY);
+        draw_signals(window);
 
         // Display the frame
         window.display();
@@ -799,6 +824,17 @@ int main()
     for(int i = 0; i < MAX_TC; i++)
     {
         make_tc();
+        std::ofstream game_state_file("game_state.txt");
+        if (game_state_file.is_open()) {
+            game_state_file << "Vehicles:\n";
+            for (int i = 0; i < MAXN; i++) {
+                game_state_file << "Vehicle " << i << ": (" << vehicles_bak[i].y << ", " << vehicles_bak[i].x << ") -> ("
+                                << vehicles_bak[i].dest_y << ", " << vehicles_bak[i].dest_x << "), dir: " << vehicles_bak[i].dir << "\n";
+            }
+            game_state_file.close();
+        } else {
+            printf("Unable to open file game_state.txt");
+        }
         
         init(MAXM, map_bak, crossroad_id_bak, vehicles_bak);
 
